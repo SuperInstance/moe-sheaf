@@ -1,50 +1,60 @@
 # moe-sheaf
 
-**Sheaf cohomology of Mixture-of-Experts routing.**
+**Sheaf cohomology of Mixture-of-Experts routing — test whether H¹ per parameter predicts generalization.**
 
-This library implements and tests DeepSeek's novel conjecture: *the sheaf cohomology H¹ of an MoE routing layer encodes the model's generalization capacity per activated parameter.*
+Models each MoE layer as a cellular sheaf on the expert manifold. Experts are points in weight space; routing overlap defines restriction maps; Vietoris-Rips filtration on pairwise distances builds the topology. Computes persistent H⁰ (connected expert clusters) and H¹ (routing obstruction) to test DeepSeek's conjecture: higher H¹ per activated parameter → better generalization.
 
-## The Conjecture
+## What This Gives You
 
-> Models whose MoE routing sheaf has higher first cohomology H¹ per activated parameter generalize better on unseen data.
-
-H¹ measures "obstructions" — inconsistencies in how the routing sheaf glues together across the expert manifold. Higher H¹ means the experts cover more diverse, non-trivially overlapping regions of function space, which (conjecturally) yields better generalization.
-
-## Installation
-
-```bash
-pip install -e ".[dev]"
-```
+- **Expert manifold representation** — each expert as a point on its weight manifold with activation statistics
+- **Sheaf construction** — stalks = expert weights, restriction maps = routing overlap
+- **Persistent cohomology** — H⁰ and H¹ via Vietoris-Rips filtration
+- **Conjecture testing** — correlates H¹/param with generalization using bootstrap confidence
+- **Full analysis pipeline** — feed a model state dict, get layer-by-layer cohomology report
+- **Correlation analysis** — Pearson and Spearman r across multiple models
 
 ## Quick Start
 
 ```python
-import numpy as np
-from moe_sheaf import Expert, MoESheaf, test_conjecture
+from moe_sheaf import Expert, MoESheaf, compute_h0, compute_h1, evaluate_conjecture
 
-# Create synthetic experts
-experts = [Expert(id=i, weight_matrix=np.random.randn(64, 32)) for i in range(8)]
-routing = np.random.randn(100, 8).softmax(axis=1)  # 100 tokens, 8 experts
+# Define experts
+experts = [Expert.random(id=i, input_dim=256, output_dim=64, seed=i) for i in range(8)]
 
+# Routing weights: (num_tokens, n_experts)
+routing = softmax(logits, axis=1)
+
+# Build sheaf and compute cohomology
 sheaf = MoESheaf(experts, routing)
-print(f"H⁰ = {sheaf.compute_h0()}")   # connected components
-print(f"H¹ = {sheaf.compute_h1():.4f}")  # obstruction
+h0 = compute_h0(sheaf.distance_matrix(), epsilon=5.0)
+h1 = compute_h1(sheaf.distance_matrix(), sheaf.routing_overlap(), epsilon=5.0)
 
-# Test the conjecture
-result = test_conjecture(experts, routing, generalization_score=0.85)
-print(f"Conjecture supported: {result.correlation_sign == 'positive'}")
+# Test DeepSeek conjecture
+result = evaluate_conjecture(experts, routing, generalization_score=0.87)
+print(f"H¹/param: {result.h1_per_param:.4f}, supported: {result.correlation_sign}")
 ```
 
-## Architecture
+## Installation
 
-- **`expert.py`** — Expert as a point on a weight manifold
-- **`routing.py`** — MoE routing weights interpreted as a sheaf on the expert manifold
-- **`cohomology.py`** — Computation of H⁰, H¹, and persistence diagrams via Vietoris-Rips filtration
-- **`analysis.py`** — Full analysis pipeline for real model state dicts
-- **`conjecture.py`** — Statistical test of DeepSeek's generalization-conjecture
+```bash
+pip install -e .
+```
+
+Requires: `numpy>=1.24`, `scipy>=1.10`
+
+## Testing
+
+```bash
+pytest tests/
+```
+
+## How It Fits
+
+Part of the SuperInstance ecosystem:
+
+- **[persistent-sheaf](https://github.com/SuperInstance/persistent-sheaf)** — Rust persistent sheaf cohomology library
+- **moe-sheaf** — Sheaf cohomology applied to MoE routing (this repo)
 
 ## License
 
 MIT
-
-Part of the [SuperInstance OpenConstruct](https://github.com/SuperInstance/OpenConstruct) ecosystem.
