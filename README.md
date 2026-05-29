@@ -46,3 +46,5 @@ print(f"Conjecture supported: {result.correlation_sign == 'positive'}")
 ## License
 
 MIT
+
+Part of the [SuperInstance OpenConstruct](https://github.com/SuperInstance/OpenConstruct) ecosystem.
